@@ -1,6 +1,6 @@
 # graph-viewport
 
-This module exports a [viewport.js](https://github.com/mvarble/fviewport.js) component which allows the user to manipulate a (directed) graph in the canvas.
+This module exports a [viewport.js](https://github.com/mvarble/viewport.js) component which allows the user to manipulate a (directed) graph in the canvas.
 The animation below showcases how one would maneuver the viewport and edit edge data.
 
 ![viewport example](https://raw.githubusercontent.com/mvarble/graph-viewport/master/example.gif)
