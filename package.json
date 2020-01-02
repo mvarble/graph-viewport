@@ -40,7 +40,6 @@
     "babel-loader": "^8.0.6",
     "babelify": "^10.0.0",
     "browserify": "^16.5.0",
-    "browserify-fs": "^1.0.0",
     "gifencoder": "^2.0.1",
     "webpack": "^4.41.5",
     "webpack-node-externals": "^1.7.2"
