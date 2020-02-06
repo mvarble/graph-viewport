@@ -7,9 +7,11 @@
 
 // module dependencies: npm packages
 import xs from 'xstream';
+import sampleCombine from 'xstream/extra/sampleCombine';
 import u from 'unist-builder';
+import { h } from '@cycle/dom';
 import { withWorldMatrix, scaledFrame } from '@mvarble/frames.js';
-import { MouseObject, FilteredMouse } from '@mvarble/viewport.js';
+import { MouseObject, FilteredMouse, parentSize, refreshReducer, mountCanvas } from '@mvarble/viewport.js';
 import * as math from 'mathjs';
 
 // module dependencies: project modules
@@ -36,24 +38,38 @@ export default {
  *
  * This component is responsible for editting a graph on the canvas. 
  * The sources are as follows:
- *   - canvas: a DOM object, as returned by the DOMDriver, corresponding to the
- *       canvas DOM
+ *   - DOM: the DOM driver's return; should be isolated
  *   - props: a stream of an object with field `initState` for the initial 
  *       reducer
  *   - state: the state of the canvas, as returned by @cycle/state
- *   - viewport: the (isolated) source as returned by the ViewportDriver
  */
-function GraphViewport({ canvas, props, state, viewport }) {
+function GraphViewport({ DOM, props, state }) {
   // generate the inital mouse streams from the dom
-  const mouse = MouseObject(canvas);
+  const mouse = MouseObject(DOM.select('canvas'));
+
+  // this is the canvas stream
+  const canvas$ = DOM.select('canvas').element();
 
   // initial state reducer
-  const initState$ = props.map(obj => (() => obj.initState));
+  const initState$ = xs.combine(props, canvas$.take(1))
+    .map(([{ initState }, canvas]) => (() => ({
+      ...resizeState(
+        initState,
+        canvas.parentNode.offsetWidth,
+        canvas.parentNode.offsetHeight,
+      ),
+      canvas,
+    })));
+
+  // refresh reducer: this checks if the DOM has made our reference stale
+  const refreshReducer$ = refreshReducer(state.stream, canvas$);
 
   // this is a reducer stream that deals with resizing coordinate system on 
   // window resizes
-  const resizeState$ = viewport.resize
-    .map(({ dims }) => (tree => resizeState(tree, ...dims)));
+  const resizeState$ = canvas$.compose(parentSize).map(dims$ => dims$.drop(1))
+    .flatten()
+    .map(dims => (tree => resizeState(tree, ...dims)))
+    .compose(mountCanvas(canvas$));
 
   // simply a subtree of the state
   const planeState$ = state.stream.map(tree => tree.children[0].children[0]);
@@ -64,18 +80,23 @@ function GraphViewport({ canvas, props, state, viewport }) {
     mouse: FilteredMouse({ mouse, node: planeState$ }), 
     state: planeState$,
   });
-  const planeReducer$ = planeSink.state.map(reducer => (tree => (
-    u('root', { id: tree.id, width: tree.width, height: tree.height }, [{ 
-      ...tree.children[0], 
-      children: [reducer(tree.children[0].children[0])],
-    }])
-  )));
+  const planeReducer$ = planeSink.state
+    .map(reducer => (tree => (
+      u('GraphViewport', { width: tree.width, height: tree.height },
+        [{ 
+          ...tree.children[0], 
+          children: [reducer(tree.children[0].children[0])],
+        }]
+      )
+    )))
+    .compose(mountCanvas(canvas$));
 
   // return the sink
   return {
-    state: xs.merge(initState$, resizeState$, planeReducer$),
+    state: xs.merge(initState$, resizeState$, planeReducer$, refreshReducer$),
     viewport: state.stream,
     preventDefault: mouse.wheel,
+    DOM: xs.of(h('canvas')),
   };
 }
 
@@ -146,17 +167,12 @@ function resizeState(tree, width, height) {
   );
 
   // return the tree
-  return u('root', { id: tree.id, width, height }, [
-    { ...windowFrame, children: [planeFrame] }
-  ]);
+  return u(
+    'GraphViewport',
+    { canvas: tree.canvas, width, height }, 
+    [{ ...windowFrame, children: [planeFrame] }]
+  );
 }
-
-/**
- * State Management:
- *
- * This following functions are used in reducers for state management regarding
- * the graph
- */
 
 function deleteSelectedNodes(tree) {
   // parse the tree
@@ -165,9 +181,11 @@ function deleteSelectedNodes(tree) {
 
   // filter out the planeFrame children
   planeFrame.children = planeFrame.children.filter(n => n.data.selected);
-  return u('root', { id: tree.id, width: tree.width, width: height }, [
-    { ...windowFrame, children: [planeFrame] }
-  ]);
+  return u(
+    'GraphViewport', 
+    { canvas: tree.canvas, width: tree.width, width: height },
+    [{ ...windowFrame, children: [planeFrame] }]
+  );
 }
 
 function appendNode(tree) {
@@ -222,7 +240,9 @@ function appendNode(tree) {
     newBox,
     ...planeFrame.children.map(deselectBox),
   ];
-  return u('root', { id: tree.id, width: tree.width, height: tree.height }, [
-    { ...windowFrame, children: [planeFrame] }
-  ]);
+  return u(
+    'GraphViewport', 
+    { canvas: tree.canvas, width: tree.width, height: tree.height }, 
+    [{ ...windowFrame, children: [planeFrame] }]
+  );
 };

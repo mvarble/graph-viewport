@@ -1,14 +1,13 @@
+import * as math from 'mathjs';
 import u from 'unist-builder';
 import xs from 'xstream';
-import fromEvent from 'xstream/extra/fromEvent';
+import sampleCombine from 'xstream/extra/sampleCombine';
 import { run } from '@cycle/run';
 import { withState } from '@cycle/state';
+import { h, makeDOMDriver } from '@cycle/dom';
 import { GraphViewport, renderGraphViewport } from '../index';
-import { makeViewportDriver } from '@mvarble/viewport.js';
-import { rotatedFrame, translatedFrame } from '@mvarble/frames.js';
-import * as math from 'mathjs';
-import GIFEncoder from 'gifencoder';
-import { finished } from 'stream';
+import { makeViewportDriver, parentSize } from '@mvarble/viewport.js';
+import { translatedFrame } from '@mvarble/frames.js';
 
 // viewport driver
 const viewport = makeViewportDriver(renderGraphViewport);
@@ -60,7 +59,7 @@ const createNode = key => {
 };
 const canvasFrame = { worldMatrix: math.identity(3) };
 const initState = (
-  u('root', { id: 'canvas' }, [
+  u('GraphViewport', [
     u('window', { worldMatrix: math.identity(3) }, [
       u('plane', { worldMatrix: M1 }, [
         translatedFrame(createNode(0), [0, -3]),
@@ -72,44 +71,26 @@ const initState = (
 );
 
 // create the app
-const app = sources => ({
-  ...GraphViewport({ 
-    ...sources, 
-    canvas: { 
-      events: name => fromEvent(document.getElementById('canvas'), name) 
-    },
+const app = sources => {
+  const reset$ = xs.periodic(3000).startWith(0);
+  const sink = GraphViewport({ 
+    ...sources,
     props: xs.of({ initState }),
-  }),
-});
+  });
+  const dom$ = xs.combine(reset$, sink.DOM).map(([i, dom]) => (
+    h(`div.${i}`, { style: { height: '100%' } }, [dom])
+  ));
+  return {
+    ...sink,
+    DOM: dom$,
+    debug: sources.state.stream,
+  };
+};
 
 // run the app
-run(withState(app), { viewport, preventDefault });
-
-// build an animation
-const encoder = new GIFEncoder(1200, 400);
-const context = document.getElementById('canvas').getContext('2d');
-encoder.start();
-encoder.setRepeat(0);
-encoder.setDelay(1000/24.);
-encoder.setQuality(10);
-xs.periodic(1000/24.).take(24 * 5).addListener({
-  next: () => {
-    console.log('frame');
-    encoder.addFrame(context);
-  },
-  complete: () => {
-    console.log('finishing animation');
-    encoder.finish();
-  }
-});
-
-const readStream = encoder.createReadStream();
-const list = [];
-readStream.on('data', (chunk) => list.push(chunk));
-readStream.on('end', () => {
-  const blob = new Blob(list, { type: 'image/gif' });
-  const url = URL.createObjectURL(blob);
-  const image = document.createElement('img');
-  image.src = url;
-  document.body.appendChild(image);
+run(withState(app), {
+  viewport,
+  preventDefault,
+  DOM: makeDOMDriver('#app'),
+  debug: l$ => l$.addListener({ next: console.log }),
 });

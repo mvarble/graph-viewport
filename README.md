@@ -13,7 +13,7 @@ The state at any given point should have the following shape.
 ```js
 {
   type: 'root',
-  id: // id of canvas being rendered,
+  canvas: // the HTMLCanvas element
   width: // (optional) width of canvas; inherited by parent.offsetWidth,
   height: // (optional) height of canvas; inherited by parent.offsetHeight,
   children: [{
@@ -74,15 +74,15 @@ The sources are as follows:
 
 | Source | Description |
 |---|---|
-| canvas | a DOM object, as returned by the `select` method provided by the factory [Cycle.js](https://cycle.js.org/) DomDriver |
+| DOM | the object provided by the factory [Cycle.js](https://cycle.js.org/) DomDriver. Isolation suggested. |
 | props | a stream of an object with field `initState` which is a state like [above](#the-state) |
 | state | the source that every [Cycle.js](https://cycle.js.org) app has, when mounted with `withState` as in `@cycle/state` |
-| viewport | the object returned by the [ViewportDriver](https://github.com/mvarble/viewport.js#makeviewportdriver) |
 
 The sinks are as follows:
 
 | Sink | Description |
 |---|---|
+| DOM | the `DOMObject` corresponding to the canvas. |
 | state | the reducer stream, as requested in the `@cycle/state` paradigm |
 | viewport | the `sources.state.stream` |
 | preventDefault | a stream of events in which one should have a driver which adds a listener such that `listener.next` executes `event.preventDefault()` |
