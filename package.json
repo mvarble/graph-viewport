@@ -29,7 +29,7 @@
     "@cycle/dom": "^22.4.0",
     "@mvarble/frames.js": "^1.0.3",
     "@mvarble/viewport.js": "^0.1.2",
-    "mathjs": "^6.3.0",
+    "mathjs": "^7.5.1",
     "unist-builder": "^2.0.2",
     "xstream": "^11.11.0"
   },
